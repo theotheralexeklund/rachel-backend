@@ -67,14 +67,29 @@ export default async function handler(req, res) {
 
   let updatedState = { ...state };
 
-  // Handle day rollover
-  if (state.active_date !== today) {
-    updatedState.morning_completed = false;
-    updatedState.afternoon_completed = false;
-    updatedState.evening_completed = false;
-    updatedState.probation_active = false;
-    updatedState.active_date = today;
+  // Handle day rollover with enforcement
+if (state.active_date && state.active_date !== today) {
+  const previousDayComplete =
+    state.morning_completed &&
+    state.afternoon_completed &&
+    state.evening_completed;
+
+  if (!previousDayComplete) {
+    if (!state.probation_active) {
+      updatedState.probation_active = true;
+    } else {
+      updatedState.current_streak = 0;
+      updatedState.probation_active = false;
+    }
   }
+
+  // Reset daily flags for new day
+  updatedState.morning_completed = false;
+  updatedState.afternoon_completed = false;
+  updatedState.evening_completed = false;
+  updatedState.active_date = today;
+}
+
 
   // Deadline calculation
   const deadline = getDeadline(checkpoint);
