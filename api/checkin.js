@@ -5,7 +5,7 @@ const supabase = createClient(
   process.env.SUPABASE_ANON_KEY
 );
 
-function getCentralTimeParts() {
+function getCentralParts() {
   const formatter = new Intl.DateTimeFormat("en-US", {
     timeZone: "America/Chicago",
     year: "numeric",
@@ -19,11 +19,8 @@ function getCentralTimeParts() {
 
   const parts = formatter.formatToParts(new Date());
   const map = {};
-
   parts.forEach(({ type, value }) => {
-    if (type !== "literal") {
-      map[type] = value;
-    }
+    if (type !== "literal") map[type] = value;
   });
 
   return {
@@ -36,14 +33,12 @@ function getCentralTimeParts() {
   };
 }
 
-
 function getDeadline(checkpoint) {
-  const deadlines = {
+  return {
     morning: { hour: 9, minute: 0 },
     afternoon: { hour: 14, minute: 0 },
-    evening: { hour: 21, minute: 0 }
-  };
-  return deadlines[checkpoint];
+    evening: { hour: 22, minute: 0 }
+  }[checkpoint];
 }
 
 export default async function handler(req, res) {
@@ -56,23 +51,11 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
 
   const { checkpoint } = req.body || {};
-
-  if (!["morning", "afternoon", "evening"].includes(checkpoint)) {
+  if (!["morning", "afternoon", "evening"].includes(checkpoint))
     return res.status(400).json({ error: "Invalid checkpoint" });
-  }
 
-  const parts = getCentralTimeParts();
-
-const centralNow = new Date(
-  parts.year,
-  parts.month - 1,
-  parts.day,
-  parts.hour,
-  parts.minute,
-  parts.second
-);
-
-  const todayStr = centralNow.toISOString().split("T")[0];
+  const parts = getCentralParts();
+  const today = `${parts.year}-${String(parts.month).padStart(2, "0")}-${String(parts.day).padStart(2, "0")}`;
 
   const { data: state, error } = await supabase
     .from("rachel_state")
@@ -82,22 +65,67 @@ const centralNow = new Date(
 
   if (error) return res.status(500).json({ error: error.message });
 
-  const deadline = getDeadline(checkpoint);
-  const deadlineTime = new Date(centralNow);
-  deadlineTime.setHours(deadline.hour, deadline.minute, 0, 0);
+  let updatedState = { ...state };
 
-  const minutesLate = Math.max(
-    0,
-    Math.floor((centralNow - deadlineTime) / 60000)
-  );
+  // Handle day rollover
+  if (state.active_date !== today) {
+    updatedState.morning_completed = false;
+    updatedState.afternoon_completed = false;
+    updatedState.evening_completed = false;
+    updatedState.probation_active = false;
+    updatedState.active_date = today;
+  }
+
+  // Deadline calculation
+  const deadline = getDeadline(checkpoint);
+  const minutesLate =
+    parts.hour * 60 +
+    parts.minute -
+    (deadline.hour * 60 + deadline.minute);
 
   const isLate = minutesLate > 0;
 
+  let violationTriggered = false;
+
+  if (isLate) {
+    if (!updatedState.probation_active) {
+      updatedState.probation_active = true;
+      violationTriggered = "warning";
+    } else {
+      updatedState.current_streak = 0;
+      updatedState.probation_active = false;
+      violationTriggered = "reset";
+    }
+  }
+
+  // Mark checkpoint completed
+  updatedState[`${checkpoint}_completed`] = true;
+
+  // Check full day completion
+  const dayComplete =
+    updatedState.morning_completed &&
+    updatedState.afternoon_completed &&
+    updatedState.evening_completed;
+
+  if (dayComplete && violationTriggered !== "reset") {
+    updatedState.current_streak += 1;
+    if (updatedState.current_streak > updatedState.longest_streak) {
+      updatedState.longest_streak = updatedState.current_streak;
+    }
+  }
+
+  await supabase
+    .from("rachel_state")
+    .update(updatedState)
+    .eq("id", 1);
+
   return res.status(200).json({
     checkpoint,
-    current_time: `${parts.hour}:${parts.minute.toString().padStart(2, "0")} Central`,
-    minutes_late: minutesLate,
     is_late: isLate,
-    state
+    minutes_late: Math.max(0, minutesLate),
+    violation: violationTriggered,
+    current_streak: updatedState.current_streak,
+    probation_active: updatedState.probation_active,
+    day_complete: dayComplete
   });
 }
