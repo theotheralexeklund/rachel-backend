@@ -150,14 +150,41 @@ if (
     .update(updatedState)
     .eq("id", 1);
 
-  return res.status(200).json({
-    checkpoint,
-    is_late: isLate,
-    within_grace: isLate && !effectiveLate,
-    minutes_late: Math.max(0, minutesLate),
-    violation: violationTriggered,
-    current_streak: updatedState.current_streak,
-    probation_active: updatedState.probation_active,
-    day_complete: dayComplete
-  });
+let status = "on_time";
+let streakChange = "unchanged";
+let toneLevel = 1;
+
+// Determine status
+if (violationTriggered === "warning") {
+  status = "warning";
+  toneLevel = 2;
 }
+
+if (violationTriggered === "reset") {
+  status = "reset";
+  toneLevel = 3;
+  streakChange = "reset";
+}
+
+if (isLate && !effectiveLate) {
+  status = "within_grace";
+}
+
+if (
+  dayComplete &&
+  violationTriggered !== "reset" &&
+  updatedState.last_completed_date === today
+) {
+  status = "perfect_day";
+  streakChange = "incremented";
+}
+
+return res.status(200).json({
+  checkpoint,
+  status,
+  tone_level: toneLevel,
+  streak_change: streakChange,
+  current_streak: updatedState.current_streak,
+  probation_active: updatedState.probation_active
+});
+
