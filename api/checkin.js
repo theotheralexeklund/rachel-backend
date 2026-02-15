@@ -95,7 +95,7 @@ const centralNow = new Date(
 
   return res.status(200).json({
     checkpoint,
-    current_time: centralNow,
+    current_time: `${parts.hour}:${parts.minute.toString().padStart(2, "0")} Central`,
     minutes_late: minutesLate,
     is_late: isLate,
     state
