@@ -79,24 +79,26 @@ export default async function handler(req, res) {
   // Deadline calculation
   const deadline = getDeadline(checkpoint);
   const minutesLate =
-    parts.hour * 60 +
-    parts.minute -
-    (deadline.hour * 60 + deadline.minute);
+  parts.hour * 60 +
+  parts.minute -
+  (deadline.hour * 60 + deadline.minute);
 
-  const isLate = minutesLate > 0;
+const GRACE_MINUTES = 15;
+const isLate = minutesLate > 0;
+const effectiveLate = minutesLate > GRACE_MINUTES;
 
-  let violationTriggered = false;
+let violationTriggered = null;
 
-  if (isLate) {
-    if (!updatedState.probation_active) {
-      updatedState.probation_active = true;
-      violationTriggered = "warning";
-    } else {
-      updatedState.current_streak = 0;
-      updatedState.probation_active = false;
-      violationTriggered = "reset";
-    }
+if (effectiveLate) {
+  if (!updatedState.probation_active) {
+    updatedState.probation_active = true;
+    violationTriggered = "warning";
+  } else {
+    updatedState.current_streak = 0;
+    updatedState.probation_active = false;
+    violationTriggered = "reset";
   }
+}
 
   // Mark checkpoint completed
   updatedState[`${checkpoint}_completed`] = true;
