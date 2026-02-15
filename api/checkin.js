@@ -122,6 +122,7 @@ export default async function handler(req, res) {
   return res.status(200).json({
     checkpoint,
     is_late: isLate,
+    within_grace: isLate && !effectiveLate,
     minutes_late: Math.max(0, minutesLate),
     violation: violationTriggered,
     current_streak: updatedState.current_streak,
