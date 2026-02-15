@@ -5,13 +5,37 @@ const supabase = createClient(
   process.env.SUPABASE_ANON_KEY
 );
 
-function getCentralTime() {
-  const now = new Date();
-  const central = new Date(
-    now.toLocaleString("en-US", { timeZone: "America/Chicago" })
-  );
-  return central;
+function getCentralTimeParts() {
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Chicago",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false
+  });
+
+  const parts = formatter.formatToParts(new Date());
+  const map = {};
+
+  parts.forEach(({ type, value }) => {
+    if (type !== "literal") {
+      map[type] = value;
+    }
+  });
+
+  return {
+    year: Number(map.year),
+    month: Number(map.month),
+    day: Number(map.day),
+    hour: Number(map.hour),
+    minute: Number(map.minute),
+    second: Number(map.second)
+  };
 }
+
 
 function getDeadline(checkpoint) {
   const deadlines = {
@@ -37,7 +61,17 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: "Invalid checkpoint" });
   }
 
-  const centralNow = getCentralTime();
+  const parts = getCentralTimeParts();
+
+const centralNow = new Date(
+  parts.year,
+  parts.month - 1,
+  parts.day,
+  parts.hour,
+  parts.minute,
+  parts.second
+);
+
   const todayStr = centralNow.toISOString().split("T")[0];
 
   const { data: state, error } = await supabase
