@@ -67,8 +67,13 @@ export default async function handler(req, res) {
 
   let updatedState = { ...state };
 
-  // Handle day rollover with enforcement
-if (state.active_date && state.active_date !== today) {
+// Handle first-time initialization
+if (!state.active_date) {
+  updatedState.active_date = today;
+}
+
+// Handle day rollover with enforcement
+else if (state.active_date !== today) {
   const previousDayComplete =
     state.morning_completed &&
     state.afternoon_completed &&
@@ -89,6 +94,7 @@ if (state.active_date && state.active_date !== today) {
   updatedState.evening_completed = false;
   updatedState.active_date = today;
 }
+
 
 
   // Deadline calculation
