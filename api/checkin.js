@@ -124,18 +124,26 @@ if (effectiveLate) {
   // Mark checkpoint completed
   updatedState[`${checkpoint}_completed`] = true;
 
-  // Check full day completion
-  const dayComplete =
-    updatedState.morning_completed &&
-    updatedState.afternoon_completed &&
-    updatedState.evening_completed;
+// Check full day completion
+const dayComplete =
+  updatedState.morning_completed &&
+  updatedState.afternoon_completed &&
+  updatedState.evening_completed;
 
-  if (dayComplete && violationTriggered !== "reset") {
-    updatedState.current_streak += 1;
-    if (updatedState.current_streak > updatedState.longest_streak) {
-      updatedState.longest_streak = updatedState.current_streak;
-    }
+if (
+  dayComplete &&
+  violationTriggered !== "reset" &&
+  updatedState.last_completed_date !== today
+) {
+  updatedState.current_streak += 1;
+
+  if (updatedState.current_streak > updatedState.longest_streak) {
+    updatedState.longest_streak = updatedState.current_streak;
   }
+
+  updatedState.last_completed_date = today;
+}
+
 
   await supabase
     .from("rachel_state")
